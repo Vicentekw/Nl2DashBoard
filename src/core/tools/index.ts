@@ -1,0 +1,343 @@
+import type { DataConfig, DataSourceType, Rect } from '../../types'
+import type { ToolSchema } from '../llm/client'
+import { generateDataset } from '../../data/mock'
+import { useDashboardStore } from '../../store/dashboard'
+import { parseRectInput } from '../validator/layout'
+
+export interface ToolDef {
+  schema: ToolSchema
+  execute: (args: Record<string, unknown>) => string | Promise<string>
+}
+
+const FALLBACK_RECT: Rect = {
+  x: { value: 2, unit: '%' },
+  y: { value: 2, unit: '%' },
+  w: { value: 30, unit: '%' },
+  h: { value: 30, unit: '%' }
+}
+
+const rectSchemaProps = {
+  x: { type: 'string', description: '左上角横坐标，如 "2%" 或 "40px"，推荐百分比' },
+  y: { type: 'string', description: '左上角纵坐标，如 "12%" 或 "80px"，推荐百分比' },
+  w: { type: 'string', description: '宽度，如 "30%" 或 "400px"，推荐百分比' },
+  h: { type: 'string', description: '高度，如 "26%" 或 "240px"，推荐百分比' }
+}
+
+const dataConfigSchema: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    sourceType: {
+      type: 'string',
+      enum: ['timeSeries', 'category', 'ratio', 'ranking', 'metric'],
+      description: '数据形态：timeSeries=时间趋势, category=分类对比, ratio=占比, ranking=排行, metric=单指标'
+    },
+    name: { type: 'string', description: '指标/系列名称，如 "销售额"' },
+    points: { type: 'number', description: 'timeSeries 的数据点数量（4-48）' },
+    categories: { type: 'array', items: { type: 'string' }, description: '分类名称列表（category/ratio/ranking 用）' },
+    min: { type: 'number', description: '数值下界' },
+    max: { type: 'number', description: '数值上界' },
+    unit: { type: 'string', description: '单位，如 "万元"、"%"' }
+  },
+  required: ['sourceType', 'name']
+}
+
+function ok(data: Record<string, unknown>): string {
+  return JSON.stringify({ ok: true, ...data })
+}
+
+function fail(error: string): string {
+  return JSON.stringify({ ok: false, error })
+}
+
+const planDashboard: ToolDef = {
+  schema: {
+    name: 'plan_dashboard',
+    description: '初始化大屏：设置标题与主题配色，并清空现有组件。生成新大屏前必须先调用一次。',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: '大屏标题' },
+        theme: {
+          type: 'object',
+          description: '主题配色（可选，CSS 颜色值）',
+          properties: {
+            primary: { type: 'string', description: '主色（图表主色）' },
+            accent: { type: 'string', description: '强调色' },
+            background: { type: 'string', description: '画布背景色（建议深色）' },
+            panel: { type: 'string', description: '面板底色' },
+            textColor: { type: 'string', description: '文字颜色' }
+          }
+        }
+      },
+      required: ['title']
+    }
+  },
+  execute(args) {
+    const dash = useDashboardStore()
+    dash.applyPlan(String(args.title ?? 'AI 大屏'), (args.theme as never) ?? undefined)
+    return ok({ message: '画布已初始化并清空，请继续创建组件。' })
+  }
+}
+
+const createChart: ToolDef = {
+  schema: {
+    name: 'create_chart',
+    description: '创建一个图表组件（折线/柱状/饼图/仪表盘/雷达/散点），自动生成并校验模拟数据。',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: '组件标题' },
+        chartType: { type: 'string', enum: ['line', 'bar', 'pie', 'gauge', 'radar', 'scatter'], description: '图表类型' },
+        x: rectSchemaProps.x,
+        y: rectSchemaProps.y,
+        w: rectSchemaProps.w,
+        h: rectSchemaProps.h,
+        dataConfig: dataConfigSchema
+      },
+      required: ['title', 'chartType', 'x', 'y', 'w', 'h', 'dataConfig']
+    }
+  },
+  execute(args) {
+    const dash = useDashboardStore()
+    const rect = parseRectInput(args, FALLBACK_RECT)
+    const dataConfig = args.dataConfig as DataConfig | undefined
+    if (!dataConfig || !dataConfig.sourceType || !dataConfig.name) {
+      return fail('dataConfig 缺少 sourceType 或 name')
+    }
+    const item = dash.addItem({
+      type: 'chart',
+      title: String(args.title ?? dataConfig.name),
+      rect,
+      chartType: (args.chartType as never) ?? 'bar',
+      dataConfig
+    })
+    // 生成并缓存数据（渲染层从 item.data 读取，保证稳定）
+    item.data = generateDataset(dataConfig, item.id)
+    return ok({
+      id: item.id,
+      message: '图表已创建',
+      layoutWarnings: dash.warnings.filter((w) => w.itemId === item.id).map((w) => w.detail)
+    })
+  }
+}
+
+const createKpi: ToolDef = {
+  schema: {
+    name: 'create_kpi',
+    description: '创建一个 KPI 指标卡（大数字 + 环比趋势），适合放在大屏顶部一行。',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: '指标名称，如 "今日销售额"' },
+        x: rectSchemaProps.x,
+        y: rectSchemaProps.y,
+        w: rectSchemaProps.w,
+        h: rectSchemaProps.h,
+        min: { type: 'number', description: '数值下界' },
+        max: { type: 'number', description: '数值上界' },
+        unit: { type: 'string', description: '单位' }
+      },
+      required: ['title', 'x', 'y', 'w', 'h']
+    }
+  },
+  execute(args) {
+    const dash = useDashboardStore()
+    const rect = parseRectInput(args, FALLBACK_RECT)
+    const dataConfig: DataConfig = {
+      sourceType: 'metric',
+      name: String(args.title ?? '指标'),
+      min: typeof args.min === 'number' ? args.min : 0,
+      max: typeof args.max === 'number' ? args.max : 1000000,
+      unit: typeof args.unit === 'string' ? args.unit : undefined
+    }
+    const item = dash.addItem({ type: 'kpi', title: dataConfig.name, rect, dataConfig })
+    item.data = generateDataset(dataConfig, item.id)
+    return ok({ id: item.id, message: 'KPI 卡已创建' })
+  }
+}
+
+const createTable: ToolDef = {
+  schema: {
+    name: 'create_table',
+    description: '创建一个数据表格组件，自动生成模拟行数据。',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        x: rectSchemaProps.x,
+        y: rectSchemaProps.y,
+        w: rectSchemaProps.w,
+        h: rectSchemaProps.h,
+        columns: { type: 'array', items: { type: 'string' }, description: '列名，3-5 列' },
+        rows: { type: 'number', description: '行数（3-20）' }
+      },
+      required: ['title', 'x', 'y', 'w', 'h', 'columns']
+    }
+  },
+  execute(args) {
+    const dash = useDashboardStore()
+    const rect = parseRectInput(args, FALLBACK_RECT)
+    const columns = (args.columns as string[] | undefined)?.slice(0, 6) ?? ['名称', '数值', '状态']
+    const rows = Math.max(3, Math.min(20, Math.round(Number(args.rows ?? 6))))
+    const dataConfig: DataConfig = { sourceType: 'category', name: String(args.title ?? '表格') }
+    const item = dash.addItem({ type: 'table', title: String(args.title ?? '明细数据'), rect, dataConfig })
+    const rnd = generateDataset(dataConfig, item.id)
+    const body: string[][] = []
+    for (let i = 0; i < rows; i++) {
+      body.push(
+        columns.map((col, ci) =>
+          ci === 0 ? `${col}${i + 1}` : String(Math.round(((rnd.series[0]?.values[i % rnd.series[0].values.length] ?? 50) * (rows - i)) || 0))
+        )
+      )
+    }
+    item.data = { columns, rows: body }
+    return ok({ id: item.id, message: '表格已创建' })
+  }
+}
+
+const createText: ToolDef = {
+  schema: {
+    name: 'create_text',
+    description: '创建一个文本说明组件。',
+    parameters: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: '文本内容' },
+        x: rectSchemaProps.x,
+        y: rectSchemaProps.y,
+        w: rectSchemaProps.w,
+        h: rectSchemaProps.h
+      },
+      required: ['text', 'x', 'y', 'w', 'h']
+    }
+  },
+  execute(args) {
+    const dash = useDashboardStore()
+    const rect = parseRectInput(args, FALLBACK_RECT)
+    const item = dash.addItem({ type: 'text', title: '文本', rect, text: String(args.text ?? '') })
+    return ok({ id: item.id, message: '文本已创建' })
+  }
+}
+
+const updateComponent: ToolDef = {
+  schema: {
+    name: 'update_component',
+    description: '更新已有组件：可改位置尺寸（rect）、标题、图表类型或数据配置。用于布局修正与内容修复。',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: '组件 id' },
+        title: { type: 'string' },
+        rect: {
+          type: 'object',
+          properties: { x: rectSchemaProps.x, y: rectSchemaProps.y, w: rectSchemaProps.w, h: rectSchemaProps.h }
+        },
+        chartType: { type: 'string', enum: ['line', 'bar', 'pie', 'gauge', 'radar', 'scatter'] },
+        dataConfig: dataConfigSchema
+      },
+      required: ['id']
+    }
+  },
+  execute(args) {
+    const dash = useDashboardStore()
+    const id = String(args.id ?? '')
+    const item = dash.getItem(id)
+    if (!item) return fail(`组件不存在：${id}`)
+    const patch: Record<string, unknown> = {}
+    if (typeof args.title === 'string') patch.title = args.title
+    if (args.chartType) patch.chartType = args.chartType
+    if (args.dataConfig) {
+      const dc = { ...(item.dataConfig ?? {}), ...(args.dataConfig as object) } as DataConfig
+      patch.dataConfig = dc
+      patch.data = generateDataset(dc, item.id)
+    }
+    if (args.rect) patch.rect = parseRectInput(args.rect as never, item.rect)
+    const okUpd = dash.updateItem(id, patch)
+    return okUpd
+      ? ok({
+          message: '组件已更新',
+          layoutWarnings: dash.warnings.filter((w) => w.itemId === id).map((w) => w.detail)
+        })
+      : fail('更新失败')
+  }
+}
+
+const deleteComponent: ToolDef = {
+  schema: {
+    name: 'delete_component',
+    description: '删除一个组件。',
+    parameters: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id']
+    }
+  },
+  execute(args) {
+    const dash = useDashboardStore()
+    const id = String(args.id ?? '')
+    if (!dash.getItem(id)) return fail(`组件不存在：${id}`)
+    dash.removeItem(id)
+    return ok({ message: `已删除 ${id}` })
+  }
+}
+
+const listComponents: ToolDef = {
+  schema: {
+    name: 'list_components',
+    description: '查看当前画布上所有组件（id、类型、位置）与布局自检结果。修正布局前先调用。',
+    parameters: { type: 'object', properties: {} }
+  },
+  execute() {
+    const dash = useDashboardStore()
+    return ok({
+      title: dash.title,
+      canvas: dash.canvas,
+      components: dash.items.map((i) => ({
+        id: i.id,
+        type: i.type,
+        title: i.title,
+        chartType: i.chartType,
+        rect: `${i.rect.x.value}${i.rect.x.unit},${i.rect.y.value}${i.rect.y.unit} ${i.rect.w.value}${i.rect.w.unit}×${i.rect.h.value}${i.rect.h.unit}`
+      })),
+      layoutIssues: dash.warnings
+    })
+  }
+}
+
+const reportFinish: ToolDef = {
+  schema: {
+    name: 'report_finish',
+    description: '全部组件创建完成且无布局问题时调用，结束生成流程。',
+    parameters: {
+      type: 'object',
+      properties: { summary: { type: 'string', description: '一句话说明生成了什么' } },
+      required: ['summary']
+    }
+  },
+  execute(args) {
+    return ok({ message: String(args.summary ?? '生成完成') })
+  }
+}
+
+export const GENERATE_TOOLS: ToolDef[] = [
+  planDashboard,
+  createChart,
+  createKpi,
+  createTable,
+  createText,
+  updateComponent,
+  deleteComponent,
+  listComponents,
+  reportFinish
+]
+
+export const REPAIR_TOOLS: ToolDef[] = [listComponents, updateComponent, deleteComponent, reportFinish]
+
+export function getToolDef(name: string, mode: 'generate' | 'repair'): ToolDef | undefined {
+  const list = mode === 'repair' ? REPAIR_TOOLS : GENERATE_TOOLS
+  return list.find((t) => t.schema.name === name)
+}
+
+export function toolSchemas(mode: 'generate' | 'repair'): ToolSchema[] {
+  return (mode === 'repair' ? REPAIR_TOOLS : GENERATE_TOOLS).map((t) => t.schema)
+}
