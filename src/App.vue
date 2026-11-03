@@ -6,12 +6,19 @@ import SettingsModal from './components/SettingsModal.vue'
 import { useChatStore } from './store/chat'
 import { useDashboardStore } from './store/dashboard'
 import { downloadJson, importJson, buildShareUrl, applyFromHash } from './core/share'
+import { exportDebugLog } from './core/debug'
 
 const chat = useChatStore()
 const dash = useDashboardStore()
 const showSettings = ref(false)
 const fileInput = ref<HTMLInputElement>()
 const toast = ref('')
+const isDev = import.meta.env.DEV
+
+function exportDebug() {
+  const file = exportDebugLog()
+  showToast(`调试日志已导出：${file}`)
+}
 
 function showToast(text: string) {
   toast.value = text
@@ -84,6 +91,9 @@ onBeforeUnmount(() => {
           <button class="btn ghost" title="导出方案 JSON" @click="downloadJson">导出</button>
           <button class="btn ghost" title="导入方案 JSON" @click="fileInput?.click()">导入</button>
           <input ref="fileInput" type="file" accept=".json,application/json" style="display: none" @change="onImport" />
+          <button v-if="isDev" class="btn ghost debug" title="导出 AI 调试日志（仅开发环境）：含每轮 LLM 请求/响应、工具调用参数与失败原因、自动诊断摘要" @click="exportDebug">
+            🐞 调试日志
+          </button>
         </div>
         <button class="btn ghost" @click="showSettings = true">设置</button>
       </div>
@@ -190,6 +200,15 @@ onBeforeUnmount(() => {
 
 .btn.ghost:hover {
   border-color: #36cfc9;
+}
+
+.btn.ghost.debug {
+  color: #f5b14c;
+  border-color: rgba(245, 177, 76, 0.45);
+}
+
+.btn.ghost.debug:hover {
+  border-color: #f5b14c;
 }
 
 .main {
