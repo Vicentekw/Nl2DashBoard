@@ -23,6 +23,17 @@ const rectSchemaProps = {
   h: { type: 'string', description: '高度，如 "26%" 或 "240px"，推荐百分比' }
 }
 
+/** 自定义组件代码的静态校验：必须是 render 函数，且禁止危险 API */
+function validateCustomCode(code: string): string | null {
+  if (!/function\s+render\s*\(/.test(code)) {
+    return 'code 必须包含 function render(ctx) {...} 函数定义'
+  }
+  if (/\b(fetch|XMLHttpRequest|localStorage|sessionStorage|indexedDB|document\.cookie|import\s*\(|eval\s*\(|WebSocket|Worker)\b/.test(code)) {
+    return 'code 禁止使用 fetch/XHR/storage/cookie/import/eval/WebSocket/Worker，只能操作传入的 ctx（el/echarts/data/theme）'
+  }
+  return null
+}
+
 const dataConfigSchema: Record<string, unknown> = {
   type: 'object',
   properties: {
@@ -219,6 +230,43 @@ const createText: ToolDef = {
   }
 }
 
+const createCustom: ToolDef = {
+  schema: {
+    name: 'create_custom_component',
+    description: '创建一个由 AI 编写渲染代码的自定义组件（运行在 iframe 沙箱中）。仅当标准物料（图表/KPI/表格/文本）无法表达需求时使用。',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        x: rectSchemaProps.x,
+        y: rectSchemaProps.y,
+        w: rectSchemaProps.w,
+        h: rectSchemaProps.h,
+        dataConfig: dataConfigSchema,
+        code: {
+          type: 'string',
+          description: '渲染函数源码，形如 "function render(ctx) { ... }"。ctx: { el: DOM容器, echarts: echarts库, data: 数据集, theme: 主题色 }。必须同步渲染。'
+        }
+      },
+      required: ['title', 'x', 'y', 'w', 'h', 'code']
+    }
+  },
+  execute(args) {
+    const dash = useDashboardStore()
+    const code = String(args.code ?? '')
+    const codeError = validateCustomCode(code)
+    if (codeError) return fail(codeError)
+    const rect = parseRectInput(args, FALLBACK_RECT)
+    const dataConfig = (args.dataConfig as DataConfig | undefined) ?? {
+      sourceType: 'category',
+      name: String(args.title ?? '自定义组件')
+    }
+    const item = dash.addItem({ type: 'custom', title: String(args.title ?? '自定义组件'), rect, dataConfig, code })
+    item.data = generateDataset(dataConfig, item.id)
+    return ok({ id: item.id, message: '自定义组件已创建，若沙箱渲染报错会自动进入修复流程' })
+  }
+}
+
 const updateComponent: ToolDef = {
   schema: {
     name: 'update_component',
@@ -233,7 +281,8 @@ const updateComponent: ToolDef = {
           properties: { x: rectSchemaProps.x, y: rectSchemaProps.y, w: rectSchemaProps.w, h: rectSchemaProps.h }
         },
         chartType: { type: 'string', enum: ['line', 'bar', 'pie', 'gauge', 'radar', 'scatter'] },
-        dataConfig: dataConfigSchema
+        dataConfig: dataConfigSchema,
+        code: { type: 'string', description: '（自定义组件）新的渲染函数源码 function render(ctx) {...}' }
       },
       required: ['id']
     }
@@ -246,6 +295,11 @@ const updateComponent: ToolDef = {
     const patch: Record<string, unknown> = {}
     if (typeof args.title === 'string') patch.title = args.title
     if (args.chartType) patch.chartType = args.chartType
+    if (typeof args.code === 'string') {
+      const codeError = validateCustomCode(args.code)
+      if (codeError) return fail(codeError)
+      patch.code = args.code
+    }
     if (args.dataConfig) {
       const dc = { ...(item.dataConfig ?? {}), ...(args.dataConfig as object) } as DataConfig
       patch.dataConfig = dc
@@ -325,6 +379,7 @@ export const GENERATE_TOOLS: ToolDef[] = [
   createKpi,
   createTable,
   createText,
+  createCustom,
   updateComponent,
   deleteComponent,
   listComponents,

@@ -41,7 +41,7 @@ export interface TableData {
 
 export interface DashboardItem {
   id: string
-  type: 'chart' | 'kpi' | 'table' | 'text'
+  type: 'chart' | 'kpi' | 'table' | 'text' | 'custom'
   title: string
   rect: Rect
   chartType?: ChartType
@@ -49,6 +49,8 @@ export interface DashboardItem {
   /** 创建时解析并缓存的模拟数据，保证同一配置渲染稳定 */
   data?: unknown
   text?: string
+  /** custom 类型：AI 编写的渲染函数源码 function render(ctx) {...} */
+  code?: string
 }
 
 export interface DashboardTheme {

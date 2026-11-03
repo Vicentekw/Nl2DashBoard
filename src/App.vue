@@ -1,14 +1,68 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import ChatPanel from './components/ChatPanel.vue'
 import DashboardCanvas from './components/DashboardCanvas.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import { useChatStore } from './store/chat'
 import { useDashboardStore } from './store/dashboard'
+import { downloadJson, importJson, buildShareUrl, applyFromHash } from './core/share'
 
 const chat = useChatStore()
 const dash = useDashboardStore()
 const showSettings = ref(false)
+const fileInput = ref<HTMLInputElement>()
+const toast = ref('')
+
+function showToast(text: string) {
+  toast.value = text
+  setTimeout(() => (toast.value = ''), 2200)
+}
+
+async function onImport(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  try {
+    const name = await importJson(file)
+    showToast(`已导入：${name}`)
+  } catch (err) {
+    showToast('导入失败：' + (err instanceof Error ? err.message : String(err)))
+  }
+}
+
+async function copyShare() {
+  const url = buildShareUrl()
+  try {
+    await navigator.clipboard.writeText(url)
+    showToast('分享链接已复制（含完整大屏数据）')
+  } catch {
+    showToast('复制失败，请手动复制地址栏链接')
+  }
+}
+
+function onKeydown(e: KeyboardEvent) {
+  const t = e.target as HTMLElement
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return
+  if (!(e.ctrlKey || e.metaKey)) return
+  const k = e.key.toLowerCase()
+  if (k === 'z' && !e.shiftKey) {
+    e.preventDefault()
+    dash.undo()
+  } else if (k === 'y' || (k === 'z' && e.shiftKey)) {
+    e.preventDefault()
+    dash.redo()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onKeydown)
+  if (applyFromHash()) showToast('已从分享链接恢复大屏')
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown)
+})
 </script>
 
 <template>
@@ -23,6 +77,14 @@ const showSettings = ref(false)
           {{ dash.warnings.length }} 个布局问题 · {{ dash.errors.length }} 个组件错误
         </span>
         <span class="token">Tokens: {{ chat.usage.promptTokens + chat.usage.completionTokens }}</span>
+        <div class="toolbar">
+          <button class="btn ghost" title="撤销 (Ctrl+Z)" :disabled="!dash.canUndo" @click="dash.undo()">⟲</button>
+          <button class="btn ghost" title="重做 (Ctrl+Y)" :disabled="!dash.canRedo" @click="dash.redo()">⟳</button>
+          <button class="btn ghost" title="把当前大屏编码进链接分享" @click="copyShare">分享</button>
+          <button class="btn ghost" title="导出方案 JSON" @click="downloadJson">导出</button>
+          <button class="btn ghost" title="导入方案 JSON" @click="fileInput?.click()">导入</button>
+          <input ref="fileInput" type="file" accept=".json,application/json" style="display: none" @change="onImport" />
+        </div>
         <button class="btn ghost" @click="showSettings = true">设置</button>
       </div>
     </header>
@@ -31,6 +93,9 @@ const showSettings = ref(false)
       <DashboardCanvas class="canvas-side" />
     </main>
     <SettingsModal v-if="showSettings" @close="showSettings = false" />
+    <transition name="fade">
+      <div v-if="toast" class="toast">{{ toast }}</div>
+    </transition>
   </div>
 </template>
 
@@ -82,6 +147,36 @@ const showSettings = ref(false)
 
 .warn-badge {
   color: #f5b14c;
+}
+
+.toolbar {
+  display: flex;
+  gap: 6px;
+}
+
+.toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(16, 23, 54, 0.95);
+  border: 1px solid rgba(54, 207, 201, 0.4);
+  color: #dce4ff;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  z-index: 200;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.25s;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 
 .btn.ghost {

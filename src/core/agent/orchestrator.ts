@@ -95,12 +95,13 @@ async function agentLoop(messages: ChatMessage[], mode: Mode): Promise<void> {
   }
 }
 
-/** 自然语言 → 大屏 */
+/** 自然语言 → 大屏（画布为空走全新生成，已有内容走增量编辑） */
 export async function generateDashboard(goal: string): Promise<void> {
   const chat = useChatStore()
+  const dash = useDashboardStore()
   if (chat.running) return
   chat.pushUser(goal)
-  await agentLoop(buildGenerateMessages(goal), 'generate')
+  await agentLoop(buildGenerateMessages(goal, dash.items.length > 0), 'generate')
 }
 
 /** AI 自修复：布局问题 + 组件运行时错误 → 自动修正 */
@@ -123,7 +124,8 @@ export async function runSelfRepair(): Promise<void> {
       title: i.title,
       chartType: i.chartType,
       rect: i.rect,
-      dataConfig: i.dataConfig
+      dataConfig: i.dataConfig,
+      ...(i.type === 'custom' ? { code: i.code } : {})
     }))
   })
   await agentLoop(messages, 'repair')

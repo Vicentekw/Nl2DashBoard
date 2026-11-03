@@ -4,6 +4,7 @@ import type { DashboardItem, Dataset, TableData } from '../types'
 import { useDashboardStore } from '../store/dashboard'
 import { buildChartOption } from '../core/charts/options'
 import EChart from './materials/EChart.vue'
+import CustomSandbox from './materials/CustomSandbox.vue'
 
 const props = defineProps<{ item: DashboardItem }>()
 
@@ -76,6 +77,18 @@ function onRenderError(message: string) {
       </div>
 
       <div v-else-if="item.type === 'text'" class="text-body">{{ item.text }}</div>
+
+      <template v-else-if="item.type === 'custom'">
+        <div v-if="renderError" class="comp-error">沙箱渲染出错：{{ renderError }}</div>
+        <CustomSandbox
+          v-else
+          :code="item.code ?? ''"
+          :data="item.data"
+          :theme="dash.theme"
+          :item-id="item.id"
+          @render-error="onRenderError"
+        />
+      </template>
     </div>
   </div>
 </template>
