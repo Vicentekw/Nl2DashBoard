@@ -3,6 +3,7 @@ import type { ToolSchema } from '../llm/client'
 import { generateDataset } from '../../data/mock'
 import { useDashboardStore } from '../../store/dashboard'
 import { parseRectInput } from '../validator/layout'
+import { kbStats, search as kbSearch } from '../rag/store'
 
 export interface ToolDef {
   schema: ToolSchema
@@ -358,6 +359,35 @@ const listComponents: ToolDef = {
   }
 }
 
+const searchKnowledge: ToolDef = {
+  schema: {
+    name: 'search_knowledge',
+    description:
+      '在用户上传的知识库文档（RAG）中检索相关内容。当用户提到"根据文档/资料/制度/数据说明"、需求引用了外部信息，或需要了解业务口径时，先调用本工具检索，再基于检索结果行动；回答中引用时注明来源文档名。',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: '检索关键词或问题，尽量具体，如"销售回款流程"、"2026年KPI口径"' },
+        topK: { type: 'number', description: '返回条数，默认 5，最大 8' }
+      },
+      required: ['query']
+    }
+  },
+  async execute(args) {
+    const query = String(args.query ?? '').trim()
+    if (!query) return fail('query 不能为空')
+    const stats = kbStats()
+    if (!stats.chunks) return ok({ message: '知识库为空：用户尚未上传任何文档，请基于通用知识回答。', results: [] })
+    const { hits, mode, notice } = await kbSearch(query, Math.min(8, Math.max(1, Number(args.topK ?? 5))))
+    if (!hits.length) return ok({ message: '未检索到相关内容，请基于通用知识回答。', results: [] })
+    return ok({
+      mode,
+      ...(notice ? { notice } : {}),
+      results: hits.map((h) => ({ source: h.sourceName, score: Number(h.score.toFixed(3)), content: h.text }))
+    })
+  }
+}
+
 const reportFinish: ToolDef = {
   schema: {
     name: 'report_finish',
@@ -382,11 +412,12 @@ export const GENERATE_TOOLS: ToolDef[] = [
   createCustom,
   updateComponent,
   deleteComponent,
+  searchKnowledge,
   listComponents,
   reportFinish
 ]
 
-export const REPAIR_TOOLS: ToolDef[] = [listComponents, updateComponent, deleteComponent, reportFinish]
+export const REPAIR_TOOLS: ToolDef[] = [listComponents, updateComponent, deleteComponent, searchKnowledge, reportFinish]
 
 export function getToolDef(name: string, mode: 'generate' | 'repair'): ToolDef | undefined {
   const list = mode === 'repair' ? REPAIR_TOOLS : GENERATE_TOOLS

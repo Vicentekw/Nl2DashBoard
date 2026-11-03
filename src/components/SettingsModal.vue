@@ -5,9 +5,17 @@ import { loadSettings, saveSettings } from '../core/settings'
 const emit = defineEmits<{ (e: 'close'): void }>()
 
 const form = reactive({ ...loadSettings() })
+const embeddingModel = form.embeddingModel ?? ''
+const embeddingBaseUrl = form.embeddingBaseUrl ?? ''
+const embeddingApiKey = form.embeddingApiKey ?? ''
 
 function save() {
-  saveSettings({ ...form })
+  saveSettings({
+    ...form,
+    embeddingModel: embeddingModel.trim() || undefined,
+    embeddingBaseUrl: embeddingBaseUrl.trim() || undefined,
+    embeddingApiKey: embeddingApiKey.trim() || undefined
+  })
   emit('close')
 }
 </script>
@@ -29,9 +37,22 @@ function save() {
           <span>模型</span>
           <input v-model="form.model" placeholder="deepseek-chat" />
         </label>
+        <label>
+          <span>嵌入模型（RAG 知识库，可选）</span>
+          <input v-model="embeddingModel" placeholder="如 text-embedding-v3 / bge-m3，留空则纯关键词检索" />
+        </label>
+        <label>
+          <span>嵌入接口 Base URL（可选，缺省用上方 Base URL）</span>
+          <input v-model="embeddingBaseUrl" placeholder="如 https://dashscope.aliyuncs.com/compatible-mode/v1" />
+        </label>
+        <label>
+          <span>嵌入接口 API Key（可选，缺省用上方 Key）</span>
+          <input v-model="embeddingApiKey" type="password" placeholder="sk-..." />
+        </label>
         <p class="tip">
           兼容所有 OpenAI 接口格式的服务：DeepSeek、通义千问、Kimi、OpenAI 等。
           Key 仅保存在浏览器 localStorage，不会上传到任何服务器。
+          嵌入模型用于知识库向量检索（DeepSeek 不提供 embeddings 接口，可用通义/SiliconFlow 等单独配置）。
         </p>
       </div>
       <div class="foot">

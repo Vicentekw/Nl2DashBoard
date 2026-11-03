@@ -9,20 +9,26 @@ const CUSTOM_COMPONENT_DOC = `自定义组件（create_custom_component）：
 - 禁止使用 fetch / XMLHttpRequest / localStorage / document.cookie / import / eval。
 - 渲染报错会进入自动修复流程，请保证代码健壮（判空、缺省值）。`
 
+const RAG_DOC = `知识库检索（search_knowledge）：
+- 用户提到"根据/按照 文档、资料、制度、说明"，或需求涉及业务口径、指标定义等外部信息时，先调用 search_knowledge 检索，再基于检索结果设计组件或回答。
+- 引用检索内容时注明来源文档名；检索不到就基于通用知识，不要编造文档内容。`
+
 const CANVAS_SPEC = `画布规格：
 - 画布固定 16:9（1600×900 逻辑像素），坐标支持百分比（推荐）与像素混合，如 "2%"、"400px"。
 - 组件不允许重叠、不允许超出画布边界。
 - 典型布局：顶部一行 4 个 KPI 卡（y:2%, h:14%），下方分列图表（h 约 36-40%），底部可放表格或文本。`
 
 const WORKFLOW = `生成流程（严格按顺序）：
-1. 调用 plan_dashboard 初始化标题与主题。
-2. 依次调用 create_kpi / create_chart / create_table / create_text / create_custom_component 创建 5-8 个组件；组件位置必须互不重叠。
-3. 若创建结果里返回 layoutWarnings，调用 list_components 查看详情并用 update_component 修正位置，直到无警告。
-4. 全部完成后调用 report_finish 结束。
+1. 需求引用外部文档/业务口径时，先调用 search_knowledge 检索。
+2. 调用 plan_dashboard 初始化标题与主题。
+3. 依次调用 create_kpi / create_chart / create_table / create_text / create_custom_component 创建 5-8 个组件；组件位置必须互不重叠。
+4. 若创建结果里返回 layoutWarnings，调用 list_components 查看详情并用 update_component 修正位置，直到无警告。
+5. 全部完成后调用 report_finish 结束。
 
 注意：
 - 图表类型与数据形态要匹配：趋势用 line+timeSeries，对比用 bar+category，占比用 pie+ratio，排行用 bar+ranking，目标达成用 gauge+metric。
 - 每个大屏使用统一配色主题，深色背景。
+${RAG_DOC}
 ${CUSTOM_COMPONENT_DOC}`
 
 const MODIFY_WORKFLOW = `当前画布上已有一张大屏，用户会以对话方式提出修改需求。规则：
@@ -31,6 +37,7 @@ const MODIFY_WORKFLOW = `当前画布上已有一张大屏，用户会以对话�
 3. 修改已有组件用 update_component；删除用 delete_component；新增用 create_kpi / create_chart / create_table / create_text / create_custom_component。
 4. 涉及位置的修改要保证不重叠、不越界；若返回 layoutWarnings，继续修正。
 5. 全部完成后调用 report_finish 结束。
+${RAG_DOC}
 ${CUSTOM_COMPONENT_DOC}`
 
 export function buildGenerateMessages(goal: string, hasItems: boolean): ChatMessage[] {

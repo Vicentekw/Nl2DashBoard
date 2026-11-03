@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import ChatPanel from './components/ChatPanel.vue'
 import DashboardCanvas from './components/DashboardCanvas.vue'
 import SettingsModal from './components/SettingsModal.vue'
+import KnowledgeModal from './components/KnowledgeModal.vue'
 import { useChatStore } from './store/chat'
 import { useDashboardStore } from './store/dashboard'
 import { downloadJson, importJson, buildShareUrl, applyFromHash } from './core/share'
@@ -11,6 +12,7 @@ import { exportDebugLog } from './core/debug'
 const chat = useChatStore()
 const dash = useDashboardStore()
 const showSettings = ref(false)
+const showKnowledge = ref(false)
 const fileInput = ref<HTMLInputElement>()
 const toast = ref('')
 const isDev = import.meta.env.DEV
@@ -87,6 +89,7 @@ onBeforeUnmount(() => {
         <div class="toolbar">
           <button class="btn ghost" title="撤销 (Ctrl+Z)" :disabled="!dash.canUndo" @click="dash.undo()">⟲</button>
           <button class="btn ghost" title="重做 (Ctrl+Y)" :disabled="!dash.canRedo" @click="dash.redo()">⟳</button>
+          <button class="btn ghost" title="知识库（RAG 文档问答）：上传文档后 AI 可检索引用" @click="showKnowledge = true">📚 知识库</button>
           <button class="btn ghost" title="把当前大屏编码进链接分享" @click="copyShare">分享</button>
           <button class="btn ghost" title="导出方案 JSON" @click="downloadJson">导出</button>
           <button class="btn ghost" title="导入方案 JSON" @click="fileInput?.click()">导入</button>
@@ -103,6 +106,7 @@ onBeforeUnmount(() => {
       <DashboardCanvas class="canvas-side" />
     </main>
     <SettingsModal v-if="showSettings" @close="showSettings = false" />
+    <KnowledgeModal v-if="showKnowledge" @close="showKnowledge = false" />
     <transition name="fade">
       <div v-if="toast" class="toast">{{ toast }}</div>
     </transition>
