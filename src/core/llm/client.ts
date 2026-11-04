@@ -35,6 +35,8 @@ export interface LlmSettings {
 
 export interface StreamResult {
   content: string
+  /** 思考模型的推理过程（delta.reasoning_content / delta.reasoning），与正文分流，不混入 content */
+  reasoning: string
   toolCalls: ToolCall[]
   usage: LlmUsage | null
 }
@@ -47,6 +49,8 @@ export interface StreamChatParams {
   tools?: ToolSchema[]
   signal?: AbortSignal
   onContentDelta?: (delta: string) => void
+  /** 思考模型单独下发的推理增量（reasoning_content），渲染层分流展示 */
+  onReasoningDelta?: (delta: string) => void
   onToolArgsDelta?: (toolIndex: number, name: string, argsDelta: string) => void
   onUsage?: (usage: LlmUsage) => void
 }
@@ -85,6 +89,7 @@ export async function streamChatCompletion(params: StreamChatParams): Promise<St
   const decoder = new TextDecoder()
   let buffer = ''
   let content = ''
+  let reasoning = ''
   let usage: LlmUsage | null = null
   const toolAcc = new Map<number, { id: string; name: string; args: string }>()
 
@@ -111,6 +116,13 @@ export async function streamChatCompletion(params: StreamChatParams): Promise<St
     const choice = choices?.[0]
     if (!choice) return
     const delta = (choice.delta ?? {}) as Record<string, unknown>
+    // 思考模型的推理流：reasoning_content（DeepSeek-R1 等）与 reasoning（部分 provider）统一分流，
+    // 绝不混进正文 content——这是流式渲染最典型的坑
+    const reasoningDelta = delta.reasoning_content ?? delta.reasoning
+    if (typeof reasoningDelta === 'string' && reasoningDelta) {
+      reasoning += reasoningDelta
+      params.onReasoningDelta?.(reasoningDelta)
+    }
     if (typeof delta.content === 'string' && delta.content) {
       content += delta.content
       params.onContentDelta?.(delta.content)
@@ -150,7 +162,7 @@ export async function streamChatCompletion(params: StreamChatParams): Promise<St
       function: { name: v.name, arguments: v.args || '{}' }
     }))
 
-  return { content, toolCalls, usage }
+  return { content, reasoning, toolCalls, usage }
 }
 
 /** 解析模型输出的 JSON（容忍 markdown 代码块包裹），失败返回 null */

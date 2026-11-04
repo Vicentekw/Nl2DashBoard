@@ -140,7 +140,7 @@ function onRenderError(message: string) {
 }
 
 .kpi-value {
-  font-size: clamp(18px, 1.8vw, 32px);
+  font-size: 30px;
   font-weight: 700;
   font-family: 'DIN Alternate', 'Consolas', monospace;
 }

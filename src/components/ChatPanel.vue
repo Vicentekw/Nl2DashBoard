@@ -37,7 +37,7 @@ function scrollBottom() {
 }
 
 watch(
-  () => chat.messages.map((m) => [m.text, m.steps.map((s) => s.status).join()]).join('|'),
+  () => chat.messages.map((m) => [m.text, m.reasoning, m.steps.map((s) => s.status).join()]).join('|'),
   () => scrollBottom()
 )
 watch(
@@ -64,6 +64,11 @@ function isLastAssistant(m: UiMessage): boolean {
 
 function isStreamingText(m: UiMessage): boolean {
   return chat.running && isLastAssistant(m) && !m.steps.some((s) => s.status === 'running')
+}
+
+/** 推理过程是否正在进行（最后一条消息 + 本轮还没有工具完成） */
+function isReasoningLive(m: UiMessage): boolean {
+  return chat.running && isLastAssistant(m) && !m.text && !m.steps.some((s) => s.status !== 'running')
 }
 
 function toolLabel(tool: string): string {
@@ -105,6 +110,11 @@ function fmtDuration(ms?: number): string {
     <div ref="listRef" class="msg-list">
       <div v-for="m in chat.messages" :key="m.id" class="msg" :class="m.role">
         <div class="bubble">
+          <!-- 思考模型的推理过程：与正文分流；思考中实时展开，结束后折叠可回看 -->
+          <details v-if="m.reasoning" class="reasoning" :open="isReasoningLive(m) || undefined">
+            <summary>{{ isReasoningLive(m) ? '深度思考中…' : '思考过程' }}</summary>
+            <div class="reasoning-body">{{ m.reasoning }}</div>
+          </details>
           <div v-if="m.text" class="text" :class="{ streaming: isStreamingText(m) }">{{ m.text }}</div>
           <div v-for="s in m.steps" :key="s.id" class="step" :class="s.status">
             <span class="step-icon">
@@ -208,6 +218,41 @@ function fmtDuration(ms?: number): string {
   content: '▍';
   color: var(--accent);
   animation: caret 0.9s steps(1) infinite;
+}
+
+/* 思考模型的推理区：暗色弱化展示，与正文明确分流 */
+.reasoning {
+  margin-bottom: 6px;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: var(--bg);
+  font-size: 12px;
+}
+
+.reasoning summary {
+  padding: 5px 9px;
+  color: var(--text-3);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.reasoning summary::before {
+  content: '▸ ';
+}
+
+.reasoning[open] summary::before {
+  content: '▾ ';
+}
+
+.reasoning-body {
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 2px 10px 8px;
+  color: var(--text-3);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 @keyframes caret {

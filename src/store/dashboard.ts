@@ -7,7 +7,7 @@ import type {
   Rect,
   SizeUnit
 } from '../types'
-import { checkLayout, clampRectIntoCanvas, cloneRect, findFreeSlot } from '../core/validator/layout'
+import { checkLayout, clampRectIntoCanvas, cloneRect, findFreeSlot, TITLE_BAND_PCT } from '../core/validator/layout'
 
 export const DEFAULT_THEME: DashboardTheme = {
   primary: '#58a6ff',
@@ -99,8 +99,8 @@ export const useDashboardStore = defineStore('dashboard', {
       this.record('add')
       this.lastAutoFix = ''
       const full: DashboardItem = { ...item, id: item.id ?? nextId() } as DashboardItem
-      // 兜底一：坐标越界自动钳制进画布，不让脏布局落画布
-      clampRectIntoCanvas(full.rect, this.canvas.w, this.canvas.h)
+      // 兜底一：坐标越界自动钳制进画布（顶部标题区保留，组件被推到标题之下），不让脏布局落画布
+      clampRectIntoCanvas(full.rect, this.canvas.w, this.canvas.h, 5, TITLE_BAND_PCT)
       this.items.push(full)
       this.refreshWarnings()
       // 兜底二：落位后仍有重叠/越界 → 自动寻找空闲位置

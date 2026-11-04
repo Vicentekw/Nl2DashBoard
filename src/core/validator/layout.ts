@@ -1,5 +1,8 @@
 import type { DashboardItem, LayoutIssue, Rect, SizeUnit } from '../../types'
 
+/** 画布顶部标题区高度占比（%），标题由系统自动渲染，组件禁止侵入 */
+export const TITLE_BAND_PCT = 7
+
 /** 解析混合单位尺寸为 px（画布坐标） */
 export function resolveSize(u: SizeUnit, total: number): number {
   return u.unit === '%' ? (u.value / 100) * total : u.value
@@ -32,6 +35,16 @@ export function checkLayout(items: DashboardItem[], canvasW: number, canvasH: nu
         itemTitle: item.title,
         kind: 'out-of-bounds',
         detail: `组件越界：位置 (${Math.round(r.x)}, ${Math.round(r.y)})，尺寸 ${Math.round(r.w)}×${Math.round(r.h)}，画布 ${canvasW}×${canvasH}`
+      })
+    }
+    // 标题区保护：顶部 TITLE_BAND_PCT% 高度由系统渲染大屏标题，组件侵入会被标题遮盖
+    const titleBandH = (TITLE_BAND_PCT / 100) * canvasH
+    if (r.y < titleBandH - tol && r.y + r.h > 0) {
+      issues.push({
+        itemId: item.id,
+        itemTitle: item.title,
+        kind: 'out-of-bounds',
+        detail: `组件侵入顶部标题区（画布顶部 ${TITLE_BAND_PCT}% 高度由系统渲染标题，会被遮盖）：当前 y 对应 ${Math.round(r.y)}px，请将 y 调整到 ≥ ${TITLE_BAND_PCT}%`
       })
     }
   }
@@ -88,19 +101,27 @@ export function cloneRect(r: Rect): Rect {
 
 /**
  * 兜底一：把矩形钳制进画布（AI 给的坐标越界时自动修正，不让脏数据落画布）。
- * 保证位置 ≥ 0 且 位置+尺寸 ≤ 画布；尺寸过小则抬到最小可用值。
+ * 保证位置 ≥ 0（或保留区之下）且 位置+尺寸 ≤ 画布；尺寸过小则抬到最小可用值。
+ * reservedTopPct：顶部保留区高度占比（标题区），组件 y 会被推到保留区之下。
  */
-export function clampRectIntoCanvas(rect: Rect, canvasW: number, canvasH: number, minPct = 5): void {
+export function clampRectIntoCanvas(
+  rect: Rect,
+  canvasW: number,
+  canvasH: number,
+  minPct = 5,
+  reservedTopPct = 0
+): void {
   const clampAxis = (
     pos: SizeUnit,
     size: SizeUnit,
-    total: number
+    total: number,
+    minPosU: number
   ): { pos: SizeUnit; size: SizeUnit } => {
     const isPct = size.unit === '%'
     const totalU = isPct ? 100 : total
     const minSize = isPct ? minPct : Math.max(40, (minPct / 100) * total)
-    let s = Math.min(Math.max(size.value, minSize), totalU)
-    let p = Math.min(Math.max(pos.value, 0), totalU - s)
+    let s = Math.min(Math.max(size.value, minSize), totalU - minPosU)
+    let p = Math.min(Math.max(pos.value, minPosU), totalU - s)
     if (p + s > totalU) {
       s = totalU - p
       if (s < minSize) {
@@ -110,10 +131,11 @@ export function clampRectIntoCanvas(rect: Rect, canvasW: number, canvasH: number
     }
     return { pos: { ...pos, value: Math.round(p * 100) / 100 }, size: { ...size, value: Math.round(s * 100) / 100 } }
   }
-  const x = clampAxis(rect.x, rect.w, canvasW)
+  const x = clampAxis(rect.x, rect.w, canvasW, 0)
   rect.x = x.pos
   rect.w = x.size
-  const y = clampAxis(rect.y, rect.h, canvasH)
+  const minY = rect.y.unit === '%' ? reservedTopPct : (reservedTopPct / 100) * canvasH
+  const y = clampAxis(rect.y, rect.h, canvasH, minY)
   rect.y = y.pos
   rect.h = y.size
 }
@@ -147,7 +169,7 @@ export function findFreeSlot(
     w: { ...target.w },
     h: { ...target.h }
   }
-  for (let y = 0; y + hPct <= 100 + 0.01; y += stepPct) {
+  for (let y = TITLE_BAND_PCT; y + hPct <= 100 + 0.01; y += stepPct) {
     for (let x = 0; x + wPct <= 100 + 0.01; x += stepPct) {
       candidate.x = { value: x, unit: '%' }
       candidate.y = { value: y, unit: '%' }

@@ -14,6 +14,8 @@ export interface UiMessage {
   id: string
   role: 'user' | 'assistant'
   text: string
+  /** 思考模型的推理过程（与正文分流渲染，流式展示、完成后可折叠） */
+  reasoning: string
   steps: StepInfo[]
 }
 
@@ -29,6 +31,7 @@ export const useChatStore = defineStore('chat', {
         id: uid(),
         role: 'assistant' as const,
         text: '我是大屏生成助手。描述你想要的大屏（主题、指标、风格），我会规划布局并自动生成组件。试试：「生成一个电商双十一实时销售大屏」。',
+        reasoning: '',
         steps: []
       }
     ] as UiMessage[],
@@ -42,16 +45,21 @@ export const useChatStore = defineStore('chat', {
   }),
   actions: {
     pushUser(text: string) {
-      this.messages.push({ id: uid(), role: 'user', text, steps: [] })
+      this.messages.push({ id: uid(), role: 'user', text, reasoning: '', steps: [] })
     },
     beginAssistant(): UiMessage {
-      const m: UiMessage = { id: uid(), role: 'assistant', text: '', steps: [] }
+      const m: UiMessage = { id: uid(), role: 'assistant', text: '', reasoning: '', steps: [] }
       this.messages.push(m)
       return m
     },
     appendText(msgId: string, delta: string) {
       const m = this.messages.find((x) => x.id === msgId)
       if (m) m.text += delta
+    },
+    /** 思考模型的推理增量（独立于正文，UI 分流渲染） */
+    appendReasoning(msgId: string, delta: string) {
+      const m = this.messages.find((x) => x.id === msgId)
+      if (m) m.reasoning += delta
     },
     setText(msgId: string, text: string) {
       const m = this.messages.find((x) => x.id === msgId)
@@ -75,7 +83,7 @@ export const useChatStore = defineStore('chat', {
       }
     },
     pushNotice(text: string) {
-      this.messages.push({ id: uid(), role: 'assistant', text: '⚙️ ' + text, steps: [] })
+      this.messages.push({ id: uid(), role: 'assistant', text: '⚙️ ' + text, reasoning: '', steps: [] })
     },
     pushError(text: string) {
       this.error = text

@@ -104,8 +104,13 @@ async function agentLoop(messages: ChatMessage[], mode: Mode): Promise<void> {
         messages,
         tools: toolSchemas(mode),
         signal: abortController.signal,
+        onReasoningDelta: (d) => {
+          // 思考模型的推理流：单独分流到消息的 reasoning 区，正文与推理不混淆
+          chat.streamStatus = '深度思考中…'
+          chat.appendReasoning(uiMsg.id, d)
+        },
         onContentDelta: (d) => {
-          chat.streamStatus = ''
+          chat.streamStatus = '生成回复中…'
           chat.appendText(uiMsg.id, d)
         },
         onToolArgsDelta: (_i, name) => {
