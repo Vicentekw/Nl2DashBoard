@@ -61,6 +61,63 @@ function fail(error: string): string {
   return JSON.stringify({ ok: false, error })
 }
 
+/**
+ * schema 驱动的参数校验（防幻觉第一道闸）：
+ * 在触碰画布之前拦截缺参 / 类型错误，返回结构化错误让模型当场自纠。
+ */
+export function validateArgs(
+  schema: ToolSchema,
+  args: Record<string, unknown>
+): string | null {
+  const params = schema.parameters as {
+    properties?: Record<string, { type?: string }>;
+    required?: string[];
+  }
+  const problems: string[] = []
+  for (const key of params.required ?? []) {
+    const v = args[key]
+    if (v === undefined || v === null || v === '') {
+      problems.push(`缺少必填参数 "${key}"`)
+      continue
+    }
+    const expect = params.properties?.[key]?.type
+    if (expect && !typeMatches(v, expect)) {
+      problems.push(`参数 "${key}" 应为 ${expect} 类型，实际为 ${typeof v}`)
+    }
+  }
+  for (const [key, v] of Object.entries(args)) {
+    const expect = params.properties?.[key]?.type
+    if (expect && v !== undefined && v !== null && !typeMatches(v, expect)) {
+      problems.push(`参数 "${key}" 应为 ${expect} 类型，实际为 ${typeof v}`)
+    }
+  }
+  return problems.length ? `参数校验失败：${problems.join('；')}。请修正后重新调用。` : null
+}
+
+function typeMatches(v: unknown, expect: string): boolean {
+  switch (expect) {
+    case 'string':
+      return typeof v === 'string'
+    case 'number':
+      return typeof v === 'number' && Number.isFinite(v)
+    case 'boolean':
+      return typeof v === 'boolean'
+    case 'array':
+      return Array.isArray(v)
+    case 'object':
+      return typeof v === 'object' && !Array.isArray(v)
+    default:
+      return true
+  }
+}
+
+/** 枚举字段自动纠正：非法值回落到默认项并返回纠正说明（校验太严会卡死流程，纠正 + 告知是更好的兜底） */
+function coerceEnum(value: unknown, allowed: string[], fallback: string): { value: string; note?: string } {
+  const v = String(value ?? '')
+  if (allowed.includes(v)) return { value: v }
+  return { value: fallback, note: `参数 "${v}" 不合法，已自动改用 "${fallback}"（合法值：${allowed.join('/')}）` }
+}
+
 const planDashboard: ToolDef = {
   schema: {
     name: 'plan_dashboard',
@@ -114,20 +171,37 @@ const createChart: ToolDef = {
     const rect = parseRectInput(args, FALLBACK_RECT)
     const dataConfig = args.dataConfig as DataConfig | undefined
     if (!dataConfig || !dataConfig.sourceType || !dataConfig.name) {
-      return fail('dataConfig 缺少 sourceType 或 name')
+      return fail('dataConfig 缺少 sourceType 或 name。sourceType 取值：timeSeries/category/ratio/ranking/metric，name 为指标名称。')
+    }
+    // 枚举兜底：chartType / sourceType 非法值自动纠正并告知（不让非法配置落画布）
+    const notes: string[] = []
+    const chart = coerceEnum(args.chartType, ['line', 'bar', 'pie', 'gauge', 'radar', 'scatter'], 'bar')
+    if (chart.note) notes.push(chart.note)
+    const sourceEnum = ['timeSeries', 'category', 'ratio', 'ranking', 'metric']
+    const src = coerceEnum(dataConfig.sourceType, sourceEnum, 'category')
+    if (src.note) {
+      dataConfig.sourceType = src.value as DataConfig['sourceType']
+      notes.push(src.note)
+    }
+    // 数据形态兜底：分类/占比/排行缺 categories 时自动补默认分类
+    if (['category', 'ratio', 'ranking'].includes(dataConfig.sourceType) && !dataConfig.categories?.length) {
+      dataConfig.categories = ['类别一', '类别二', '类别三', '类别四']
+      notes.push('dataConfig.categories 缺失，已自动填充默认分类，可后续 update_component 调整')
     }
     const item = dash.addItem({
       type: 'chart',
-      title: String(args.title ?? dataConfig.name),
+      title: String(args.title ?? dataConfig.name).slice(0, 40),
       rect,
-      chartType: (args.chartType as never) ?? 'bar',
+      chartType: chart.value as never,
       dataConfig
     })
     // 生成并缓存数据（渲染层从 item.data 读取，保证稳定）
     item.data = generateDataset(dataConfig, item.id)
+    if (dash.lastAutoFix) notes.push(dash.lastAutoFix)
     return ok({
       id: item.id,
       message: '图表已创建',
+      ...(notes.length ? { warnings: notes } : {}),
       layoutWarnings: dash.warnings.filter((w) => w.itemId === item.id).map((w) => w.detail)
     })
   }
@@ -164,7 +238,7 @@ const createKpi: ToolDef = {
     }
     const item = dash.addItem({ type: 'kpi', title: dataConfig.name, rect, dataConfig })
     item.data = generateDataset(dataConfig, item.id)
-    return ok({ id: item.id, message: 'KPI 卡已创建' })
+    return ok({ id: item.id, message: 'KPI 卡已创建', ...(dash.lastAutoFix ? { warnings: [dash.lastAutoFix] } : {}) })
   }
 }
 
@@ -203,7 +277,7 @@ const createTable: ToolDef = {
       )
     }
     item.data = { columns, rows: body }
-    return ok({ id: item.id, message: '表格已创建' })
+    return ok({ id: item.id, message: '表格已创建', ...(dash.lastAutoFix ? { warnings: [dash.lastAutoFix] } : {}) })
   }
 }
 
@@ -227,7 +301,7 @@ const createText: ToolDef = {
     const dash = useDashboardStore()
     const rect = parseRectInput(args, FALLBACK_RECT)
     const item = dash.addItem({ type: 'text', title: '文本', rect, text: String(args.text ?? '') })
-    return ok({ id: item.id, message: '文本已创建' })
+    return ok({ id: item.id, message: '文本已创建', ...(dash.lastAutoFix ? { warnings: [dash.lastAutoFix] } : {}) })
   }
 }
 
@@ -264,7 +338,11 @@ const createCustom: ToolDef = {
     }
     const item = dash.addItem({ type: 'custom', title: String(args.title ?? '自定义组件'), rect, dataConfig, code })
     item.data = generateDataset(dataConfig, item.id)
-    return ok({ id: item.id, message: '自定义组件已创建，若沙箱渲染报错会自动进入修复流程' })
+    return ok({
+      id: item.id,
+      message: '自定义组件已创建，若沙箱渲染报错会自动进入修复流程；连续 3 次渲染失败会被自动移除',
+      ...(dash.lastAutoFix ? { warnings: [dash.lastAutoFix] } : {})
+    })
   }
 }
 

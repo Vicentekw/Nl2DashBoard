@@ -117,7 +117,7 @@ const style = computed(() => ({
 .canvas-wrap {
   height: 100%;
   padding: 16px;
-  background: #070b1c;
+  background: var(--bg);
   overflow: auto;
 }
 
@@ -126,9 +126,10 @@ const style = computed(() => ({
   width: 100%;
   aspect-ratio: 16 / 9;
   min-height: 480px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  border: 1px solid var(--border);
   overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
 .canvas-title {
@@ -143,23 +144,24 @@ const style = computed(() => ({
   font-size: clamp(14px, 1.3vw, 22px);
   font-weight: 700;
   letter-spacing: 4px;
-  background: linear-gradient(180deg, rgba(54, 207, 201, 0.12), transparent);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   pointer-events: none;
 }
 
 .item {
   position: absolute;
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--panel, #121a3a);
   border: 1px solid rgba(255, 255, 255, 0.1);
   overflow: hidden;
   cursor: move;
   user-select: none;
+  transition: border-color 0.12s;
 }
 
 .item.selected {
-  border-color: #36cfc9;
-  box-shadow: 0 0 0 1px rgba(54, 207, 201, 0.5);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
 .resize-handle {
@@ -169,17 +171,25 @@ const style = computed(() => ({
   width: 14px;
   height: 14px;
   cursor: nwse-resize;
-  background: linear-gradient(135deg, transparent 50%, rgba(54, 207, 201, 0.7) 50%);
+  background: linear-gradient(135deg, transparent 50%, var(--accent) 50%);
+  opacity: 0;
+}
+
+.item:hover .resize-handle,
+.item.selected .resize-handle {
+  opacity: 0.85;
 }
 
 .empty-hint {
   position: absolute;
   inset: 0;
   display: flex;
+  flex-direction: column;
+  gap: 8px;
   align-items: center;
   justify-content: center;
-  color: rgba(220, 228, 255, 0.3);
-  font-size: 15px;
-  letter-spacing: 2px;
+  color: var(--text-3);
+  font-size: 14px;
+  letter-spacing: 1px;
 }
 </style>

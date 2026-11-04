@@ -7,14 +7,14 @@ import type {
   Rect,
   SizeUnit
 } from '../types'
-import { checkLayout } from '../core/validator/layout'
+import { checkLayout, clampRectIntoCanvas, cloneRect, findFreeSlot } from '../core/validator/layout'
 
 export const DEFAULT_THEME: DashboardTheme = {
-  primary: '#36cfc9',
-  accent: '#597ef7',
-  background: '#0b1026',
-  panel: '#121a3a',
-  textColor: '#dce4ff'
+  primary: '#58a6ff',
+  accent: '#a371f7',
+  background: '#0d1117',
+  panel: '#161b22',
+  textColor: '#e6edf3'
 }
 
 interface Snapshot {
@@ -39,6 +39,10 @@ export const useDashboardStore = defineStore('dashboard', {
     selectedId: '',
     past: [] as Snapshot[],
     future: [] as Snapshot[],
+    /** 最近一次 addItem 的自动兜底说明（无兜底为空），工具层读取后回传给 AI */
+    lastAutoFix: '',
+    /** 每个组件累计运行时错误次数（用于自动移除反复失败的组件） */
+    _errorCounts: {} as Record<string, number>,
     _lastLabel: '',
     _lastTime: 0
   }),
@@ -93,9 +97,24 @@ export const useDashboardStore = defineStore('dashboard', {
     },
     addItem(item: Omit<DashboardItem, 'id'> & { id?: string }): DashboardItem {
       this.record('add')
+      this.lastAutoFix = ''
       const full: DashboardItem = { ...item, id: item.id ?? nextId() } as DashboardItem
+      // 兜底一：坐标越界自动钳制进画布，不让脏布局落画布
+      clampRectIntoCanvas(full.rect, this.canvas.w, this.canvas.h)
       this.items.push(full)
       this.refreshWarnings()
+      // 兜底二：落位后仍有重叠/越界 → 自动寻找空闲位置
+      if (this.warnings.some((w) => w.itemId === full.id)) {
+        const others = this.items.filter((i) => i.id !== full.id).map((i) => cloneRect(i.rect))
+        const slot = findFreeSlot(full.rect, others, this.canvas.w, this.canvas.h)
+        if (slot) {
+          full.rect = slot
+          this.refreshWarnings()
+          this.lastAutoFix = '位置非法（越界/重叠），已自动调整到空闲区域'
+        } else {
+          this.lastAutoFix = '位置非法且画布已无空闲区域，组件保持钳制后的位置，存在警告待处理'
+        }
+      }
       return full
     },
     updateItem(id: string, patch: Partial<DashboardItem>, label?: string) {
@@ -129,8 +148,18 @@ export const useDashboardStore = defineStore('dashboard', {
       this.warnings = checkLayout(this.items, this.canvas.w, this.canvas.h)
     },
     pushError(err: ComponentError) {
-      if (!this.errors.some((e) => e.itemId === err.itemId && e.message === err.message)) {
-        this.errors.push(err)
+      if (this.errors.some((e) => e.itemId === err.itemId && e.message === err.message)) return
+      this.errors.push(err)
+      // 兜底三：同一组件反复运行时错误 ≥ 3 次 → 自动移除，不让坏组件留在画布上
+      const count = (this._errorCounts[err.itemId] ?? 0) + 1
+      this._errorCounts[err.itemId] = count
+      if (count >= 3) {
+        const item = this.getItem(err.itemId)
+        this.removeItem(err.itemId)
+        this._errorCounts[err.itemId] = 0
+        import('./chat').then(({ useChatStore }) => {
+          useChatStore().pushNotice(`组件「${item?.title ?? err.itemId}」连续 ${count} 次渲染失败，已自动从画布移除（防止坏组件残留）。`)
+        })
       }
     },
     clearErrors() {

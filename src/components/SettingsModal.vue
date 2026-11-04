@@ -67,7 +67,7 @@ function save() {
 .mask {
   position: fixed;
   inset: 0;
-  background: rgba(3, 6, 18, 0.7);
+  background: rgba(1, 4, 9, 0.65);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -75,17 +75,21 @@ function save() {
 }
 
 .modal {
-  width: 420px;
-  background: #101736;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
+  width: 440px;
+  max-height: 84vh;
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
   padding: 18px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
 }
 
 .head {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   margin-bottom: 14px;
+  color: var(--text);
 }
 
 .body {
@@ -99,27 +103,32 @@ label {
   flex-direction: column;
   gap: 5px;
   font-size: 12px;
-  color: rgba(220, 228, 255, 0.7);
+  color: var(--text-2);
 }
 
 input {
   height: 34px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.05);
-  color: #dce4ff;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
   padding: 0 10px;
   font-size: 13px;
+  transition: border-color 0.15s;
 }
 
 input:focus {
-  border-color: rgba(54, 207, 201, 0.6);
+  border-color: var(--accent);
+}
+
+input::placeholder {
+  color: var(--text-3);
 }
 
 .tip {
   font-size: 11px;
-  color: rgba(220, 228, 255, 0.4);
-  line-height: 1.6;
+  color: var(--text-3);
+  line-height: 1.7;
 }
 
 .foot {
@@ -131,15 +140,16 @@ input:focus {
 
 .btn {
   padding: 7px 16px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
   font-size: 13px;
+  color: var(--text-2);
 }
 
 .btn.primary {
-  background: linear-gradient(90deg, #36cfc9, #597ef7);
+  background: var(--accent);
   border: none;
-  color: #06122b;
+  color: #0d1117;
   font-weight: 600;
 }
 </style>

@@ -6,6 +6,8 @@ export interface StepInfo {
   tool: string
   status: 'running' | 'done' | 'error'
   result?: string
+  startedAt?: number
+  durationMs?: number
 }
 
 export interface UiMessage {
@@ -32,6 +34,10 @@ export const useChatStore = defineStore('chat', {
     ] as UiMessage[],
     running: false,
     error: '',
+    /** 本轮运行开始时间戳（用于前端显示已耗时） */
+    runningSince: 0,
+    /** 实时流状态文案（模型思考中 / 正在生成工具参数…），消除工具调用轮次的干等感 */
+    streamStatus: '',
     usage: { promptTokens: 0, completionTokens: 0 } as LlmUsage
   }),
   actions: {
@@ -52,7 +58,7 @@ export const useChatStore = defineStore('chat', {
       if (m) m.text = text
     },
     beginTool(msgId: string, tool: string): StepInfo {
-      const step: StepInfo = { id: uid(), tool, status: 'running' }
+      const step: StepInfo = { id: uid(), tool, status: 'running', startedAt: Date.now() }
       const m = this.messages.find((x) => x.id === msgId)
       if (m) m.steps.push(step)
       return step
@@ -63,9 +69,13 @@ export const useChatStore = defineStore('chat', {
         if (s) {
           s.status = failed ? 'error' : 'done'
           s.result = result
+          if (s.startedAt) s.durationMs = Date.now() - s.startedAt
           return
         }
       }
+    },
+    pushNotice(text: string) {
+      this.messages.push({ id: uid(), role: 'assistant', text: '⚙️ ' + text, steps: [] })
     },
     pushError(text: string) {
       this.error = text

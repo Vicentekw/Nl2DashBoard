@@ -119,7 +119,7 @@ function clearKb() {
 .mask {
   position: fixed;
   inset: 0;
-  background: rgba(3, 6, 18, 0.7);
+  background: rgba(1, 4, 9, 0.65);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -130,27 +130,29 @@ function clearKb() {
   width: 560px;
   max-height: 82vh;
   overflow: auto;
-  background: #101736;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
   padding: 18px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
 }
 
 .head {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  color: var(--text);
 }
 
 .close {
   background: none;
   border: none;
-  color: rgba(220, 228, 255, 0.6);
+  color: var(--text-3);
   font-size: 14px;
   cursor: pointer;
 }
@@ -158,11 +160,11 @@ function clearKb() {
 .hint {
   font-size: 12px;
   line-height: 1.7;
-  color: rgba(220, 228, 255, 0.55);
+  color: var(--text-2);
 }
 
 .hint b {
-  color: #36cfc9;
+  color: var(--accent);
   font-weight: 600;
 }
 
@@ -177,13 +179,14 @@ function clearKb() {
 
 input,
 textarea {
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.05);
-  color: #dce4ff;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
   padding: 8px 10px;
   font-size: 13px;
   font-family: inherit;
+  transition: border-color 0.15s;
 }
 
 textarea {
@@ -193,8 +196,13 @@ textarea {
 
 input:focus,
 textarea:focus {
-  border-color: rgba(54, 207, 201, 0.6);
+  border-color: var(--accent);
   outline: none;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-3);
 }
 
 .actions {
@@ -205,11 +213,11 @@ textarea:focus {
 
 .status {
   font-size: 12px;
-  color: #f5b14c;
+  color: var(--warn);
 }
 
 .sources {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border-soft);
   padding-top: 10px;
   display: flex;
   flex-direction: column;
@@ -218,7 +226,7 @@ textarea:focus {
 
 .sources-head {
   font-size: 12px;
-  color: rgba(220, 228, 255, 0.5);
+  color: var(--text-3);
 }
 
 .source {
@@ -226,8 +234,9 @@ textarea:focus {
   align-items: center;
   gap: 10px;
   font-size: 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
   padding: 6px 10px;
 }
 
@@ -236,18 +245,18 @@ textarea:focus {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #dce4ff;
+  color: var(--text);
 }
 
 .s-meta {
-  color: rgba(220, 228, 255, 0.4);
+  color: var(--text-3);
   flex-shrink: 0;
 }
 
 .s-del {
   background: none;
-  border: 1px solid rgba(255, 100, 100, 0.35);
-  color: #ff8a8a;
+  border: 1px solid rgba(248, 81, 73, 0.35);
+  color: #ffb3ae;
   border-radius: 4px;
   font-size: 11px;
   padding: 2px 8px;
@@ -256,8 +265,8 @@ textarea:focus {
 
 .btn {
   padding: 7px 16px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
   font-size: 13px;
   cursor: pointer;
 }
@@ -268,20 +277,20 @@ textarea:focus {
 }
 
 .btn.primary {
-  background: linear-gradient(90deg, #36cfc9, #597ef7);
+  background: var(--accent);
   border: none;
-  color: #06122b;
+  color: #0d1117;
   font-weight: 600;
 }
 
 .btn.ghost {
   background: none;
-  color: #dce4ff;
+  color: var(--text-2);
 }
 
 .btn.danger {
-  color: #ff8a8a;
-  border-color: rgba(255, 100, 100, 0.35);
+  color: #ffb3ae;
+  border-color: rgba(248, 81, 73, 0.35);
   align-self: flex-start;
 }
 </style>

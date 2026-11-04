@@ -4,6 +4,26 @@
   padding: 0;
 }
 
+:root {
+  /* 中性专业配色（参照成熟开发者工具 / BI 产品），单一克制主色 */
+  --bg: #0d1117;
+  --panel: #161b22;
+  --panel-2: #1d232c;
+  --border: #2d333b;
+  --border-soft: #22272e;
+  --text: #e6edf3;
+  --text-2: #9198a1;
+  --text-3: #6e7681;
+  --accent: #539bf5;
+  --accent-soft: rgba(83, 155, 245, 0.13);
+  --success: #3fb950;
+  --warn: #d29922;
+  --warn-soft: rgba(210, 153, 34, 0.12);
+  --danger: #f85149;
+  --danger-soft: rgba(248, 81, 73, 0.12);
+  --radius: 6px;
+}
+
 html,
 body,
 #app {
@@ -11,11 +31,12 @@ body,
 }
 
 body {
-  font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
-  background: #070b1c;
-  color: #dce4ff;
+  font-family: -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
   font-size: 14px;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
 button {
@@ -33,13 +54,17 @@ textarea {
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 3px;
+  background: var(--border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-3);
 }
 
 ::-webkit-scrollbar-track {

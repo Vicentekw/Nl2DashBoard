@@ -118,6 +118,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
+  background: var(--bg);
 }
 
 .topbar {
@@ -126,8 +127,8 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   height: 48px;
   padding: 0 16px;
-  background: #0b1026;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
@@ -138,17 +139,15 @@ onBeforeUnmount(() => {
 }
 
 .logo {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 700;
-  background: linear-gradient(90deg, #36cfc9, #597ef7);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--text);
+  letter-spacing: 0.2px;
 }
 
 .sub {
   font-size: 12px;
-  color: rgba(220, 228, 255, 0.45);
+  color: var(--text-3);
 }
 
 .meta {
@@ -156,11 +155,11 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 12px;
   font-size: 12px;
-  color: rgba(220, 228, 255, 0.55);
+  color: var(--text-2);
 }
 
 .warn-badge {
-  color: #f5b14c;
+  color: var(--warn);
 }
 
 .toolbar {
@@ -173,14 +172,14 @@ onBeforeUnmount(() => {
   bottom: 28px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(16, 23, 54, 0.95);
-  border: 1px solid rgba(54, 207, 201, 0.4);
-  color: #dce4ff;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
   padding: 10px 18px;
-  border-radius: 8px;
+  border-radius: var(--radius);
   font-size: 13px;
   z-index: 200;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
 .fade-enter-active,
@@ -195,24 +194,30 @@ onBeforeUnmount(() => {
 
 .btn.ghost {
   padding: 5px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 6px;
-  color: #dce4ff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-2);
   font-size: 12px;
-  transition: border-color 0.2s;
+  transition: border-color 0.15s, color 0.15s;
 }
 
 .btn.ghost:hover {
-  border-color: #36cfc9;
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.btn.ghost:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .btn.ghost.debug {
-  color: #f5b14c;
-  border-color: rgba(245, 177, 76, 0.45);
+  color: var(--warn);
+  border-color: rgba(210, 153, 34, 0.45);
 }
 
 .btn.ghost.debug:hover {
-  border-color: #f5b14c;
+  border-color: var(--warn);
 }
 
 .main {
@@ -224,7 +229,7 @@ onBeforeUnmount(() => {
 .chat-side {
   width: 380px;
   flex-shrink: 0;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: 1px solid var(--border);
 }
 
 .canvas-side {

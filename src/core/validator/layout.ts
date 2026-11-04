@@ -80,3 +80,81 @@ export function parseRectInput(
     h: parseSizeInput(input.h, fallback.h)
   }
 }
+
+/** 深拷贝 Rect */
+export function cloneRect(r: Rect): Rect {
+  return JSON.parse(JSON.stringify(r)) as Rect
+}
+
+/**
+ * 兜底一：把矩形钳制进画布（AI 给的坐标越界时自动修正，不让脏数据落画布）。
+ * 保证位置 ≥ 0 且 位置+尺寸 ≤ 画布；尺寸过小则抬到最小可用值。
+ */
+export function clampRectIntoCanvas(rect: Rect, canvasW: number, canvasH: number, minPct = 5): void {
+  const clampAxis = (
+    pos: SizeUnit,
+    size: SizeUnit,
+    total: number
+  ): { pos: SizeUnit; size: SizeUnit } => {
+    const isPct = size.unit === '%'
+    const totalU = isPct ? 100 : total
+    const minSize = isPct ? minPct : Math.max(40, (minPct / 100) * total)
+    let s = Math.min(Math.max(size.value, minSize), totalU)
+    let p = Math.min(Math.max(pos.value, 0), totalU - s)
+    if (p + s > totalU) {
+      s = totalU - p
+      if (s < minSize) {
+        s = minSize
+        p = totalU - s
+      }
+    }
+    return { pos: { ...pos, value: Math.round(p * 100) / 100 }, size: { ...size, value: Math.round(s * 100) / 100 } }
+  }
+  const x = clampAxis(rect.x, rect.w, canvasW)
+  rect.x = x.pos
+  rect.w = x.size
+  const y = clampAxis(rect.y, rect.h, canvasH)
+  rect.y = y.pos
+  rect.h = y.size
+}
+
+/** 以 px 判断两矩形是否重叠（忽略 0.1% 面积以下的擦边接触） */
+function overlaps(a: Rect, b: Rect, canvasW: number, canvasH: number): boolean {
+  const pa = { x: resolveSize(a.x, canvasW), y: resolveSize(a.y, canvasH), w: resolveSize(a.w, canvasW), h: resolveSize(a.h, canvasH) }
+  const pb = { x: resolveSize(b.x, canvasW), y: resolveSize(b.y, canvasH), w: resolveSize(b.w, canvasW), h: resolveSize(b.h, canvasH) }
+  const ox = Math.min(pa.x + pa.w, pb.x + pb.w) - Math.max(pa.x, pb.x)
+  const oy = Math.min(pa.y + pa.h, pb.y + pb.h) - Math.max(pa.y, pb.y)
+  return ox > 0 && oy > 0 && ox * oy > canvasW * canvasH * 0.001
+}
+
+/**
+ * 兜底二：为组件寻找第一个不与现有组件重叠的空闲位置（自上而下、自左向右网格扫描）。
+ * 找不到返回 null（画布已满，交还给 AI 决策）。
+ */
+export function findFreeSlot(
+  target: Rect,
+  others: Rect[],
+  canvasW: number,
+  canvasH: number
+): Rect | null {
+  const stepPct = 2
+  const toPct = (u: SizeUnit, total: number) => (u.unit === '%' ? u.value : (u.value / total) * 100)
+  const wPct = Math.min(Math.max(toPct(target.w, canvasW), 5), 100)
+  const hPct = Math.min(Math.max(toPct(target.h, canvasH), 5), 100)
+  const candidate: Rect = {
+    x: { value: 0, unit: '%' },
+    y: { value: 0, unit: '%' },
+    w: { ...target.w },
+    h: { ...target.h }
+  }
+  for (let y = 0; y + hPct <= 100 + 0.01; y += stepPct) {
+    for (let x = 0; x + wPct <= 100 + 0.01; x += stepPct) {
+      candidate.x = { value: x, unit: '%' }
+      candidate.y = { value: y, unit: '%' }
+      if (!others.some((o) => overlaps(candidate, o, canvasW, canvasH))) {
+        return cloneRect(candidate)
+      }
+    }
+  }
+  return null
+}

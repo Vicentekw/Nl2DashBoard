@@ -1,7 +1,7 @@
 import type { ChatMessage } from '../llm/client'
 import { LlmError, streamChatCompletion } from '../llm/client'
 import { buildGenerateMessages, buildRepairMessages } from '../llm/prompt'
-import { getToolDef, toolSchemas } from '../tools/index'
+import { getToolDef, toolSchemas, validateArgs } from '../tools/index'
 import { useChatStore } from '../../store/chat'
 import { useDashboardStore } from '../../store/dashboard'
 import { loadSettings } from '../settings'
@@ -40,6 +40,12 @@ async function executeToolCall(
     record({ ok: false, parseError: '工具参数不是合法 JSON' })
     return { result: JSON.stringify({ ok: false, error: '工具参数不是合法 JSON' }), finished: false }
   }
+  // 防幻觉第一道闸：schema 级校验，缺参/类型错误在触碰画布前拦截，让模型当场自纠
+  const schemaError = validateArgs(def.schema, args)
+  if (schemaError) {
+    record({ ok: false, error: schemaError })
+    return { result: JSON.stringify({ ok: false, error: schemaError }), finished: false }
+  }
   try {
     const result = await def.execute(args)
     let parsed: { ok?: boolean; error?: string } = {}
@@ -59,7 +65,14 @@ async function executeToolCall(
           ? '未提供完整 x/y/w/h，组件将使用兜底位置'
           : undefined
     })
-    const finished = name === 'report_finish'
+    // report_finish 门禁：画布上还有组件错误/布局警告时不允许结束（AI 可出错，但不留在画布上）
+    const dash = useDashboardStore()
+    if (name === 'report_finish' && !failed && (dash.errors.length > 0 || dash.warnings.length > 0)) {
+      const reason = `无法结束：画布上仍有 ${dash.errors.length} 个组件错误、${dash.warnings.length} 个布局警告。请先调用 list_components 查看，逐个用 update_component 修复或用 delete_component 删除，全部清零后再调用 report_finish。`
+      record({ ok: false, error: reason })
+      return { result: JSON.stringify({ ok: false, error: reason }), finished: false }
+    }
+    const finished = name === 'report_finish' && !failed
     return { result, finished }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -78,20 +91,29 @@ async function agentLoop(messages: ChatMessage[], mode: Mode): Promise<void> {
 
   abortController = new AbortController()
   chat.running = true
+  chat.runningSince = Date.now()
   chat.error = ''
 
   try {
     for (let round = 0; round < MAX_ROUNDS; round++) {
       dbg('llm_request', { mode, messageCount: messages.length, lastMessage: messages[messages.length - 1] }, round)
       const uiMsg = chat.beginAssistant()
+      chat.streamStatus = '模型思考中…'
       const res = await streamChatCompletion({
         settings,
         messages,
         tools: toolSchemas(mode),
         signal: abortController.signal,
-        onContentDelta: (d) => chat.appendText(uiMsg.id, d),
+        onContentDelta: (d) => {
+          chat.streamStatus = ''
+          chat.appendText(uiMsg.id, d)
+        },
+        onToolArgsDelta: (_i, name) => {
+          chat.streamStatus = name ? `正在调用 ${name} · 生成参数中…` : '正在生成工具调用…'
+        },
         onUsage: (u) => chat.addUsage(u)
       })
+      chat.streamStatus = ''
       chat.setText(uiMsg.id, res.content)
       dbg(
         'llm_response',
@@ -137,6 +159,7 @@ async function agentLoop(messages: ChatMessage[], mode: Mode): Promise<void> {
     }
   } finally {
     chat.running = false
+    chat.streamStatus = ''
     abortController = null
   }
 }
